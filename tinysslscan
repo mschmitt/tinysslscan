@@ -1,0 +1,58 @@
+#!/bin/bash 
+
+# Pure bash + openssl SSL cipher scanner for cases where 
+# nothing™ can be installed.
+
+# THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES 
+# WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF 
+# MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR 
+# ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES 
+# WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN 
+# ACTION OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF 
+# OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+
+# ./tinysslscan server:port [all s_client options]
+
+# Find the protocols supported by this openssl s_client
+# and test their availability on the server
+openssl s_client -help 2>&1 |
+while read -r LINE
+do
+	# Test for protocols based on -help output, generate
+	# s_client option and output on the fly
+	#
+	# -ssl2         - just use SSLv2
+	# -ssl3         - just use SSLv3
+	# -tls1_2       - just use TLSv1.2
+	# -tls1_1       - just use TLSv1.1
+	# -tls1         - just use TLSv1
+	# -dtls1        - just use DTLSv1
+	#
+	# Assume that this is how to find the supported protocols 
+	# in this openssl version
+	[[ "$LINE" =~ -(ssl|tls)[0-9].*(SSL|TLS) ]] || continue
+	# Remove all except the first word (the protocol option)
+	SSLOPT=${LINE%%\ *}
+	# Remove all except the last word (the protocol name)
+	SSLVERSION=${LINE##*\ }
+	if openssl s_client -connect "$@" "$SSLOPT" </dev/null >/dev/null 2>&1
+	then
+		ACTIVE="Active:     "
+	else
+		ACTIVE="Not Active: "
+	fi
+	echo "$ACTIVE $SSLVERSION"
+done
+
+openssl ciphers -v 'ALL:COMPLEMENTOFALL:@STRENGTH' |
+while read -r LINE
+do
+	CIPHER=${LINE/%\ */}
+	if openssl s_client -connect "$@" -cipher "$CIPHER" </dev/null >/dev/null 2>&1 
+	then
+		ACTIVE="Active:     "
+	else
+		ACTIVE="Not Active: "
+	fi
+	echo "$ACTIVE $CIPHER"
+done
